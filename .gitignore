@@ -1,0 +1,16 @@
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.streamlit/secrets.toml
+data/raw/
+*.py[cod]
+.idea/
+tmp/
+.env
+.env.*
+!.env.example
+pres_prof.txt
+consigne.md
+IndividualStudentPRJ_ Data StorytellingDashboardWithStreamlit2026.pdf
+
