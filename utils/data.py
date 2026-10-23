@@ -8,7 +8,7 @@ from utils.constants import ACCIDENTS_PATH, QUALITY_PATH, USERS_PATH
 
 @st.cache_data(show_spinner=False)
 def load_data() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
-    if not ACCIDENTS_PATH.exists() or not USERS_PATH.exists():
+    if not all(path.exists() for path in (ACCIDENTS_PATH, USERS_PATH, QUALITY_PATH)):
         raise FileNotFoundError(
             "Les données préparées sont absentes. Exécutez "
             "`python scripts/prepare_data.py`."

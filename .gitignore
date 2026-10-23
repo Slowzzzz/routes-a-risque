@@ -1,4 +1,5 @@
 .venv/
+.venv-final/
 venv/
 __pycache__/
 .pytest_cache/
@@ -10,7 +11,5 @@ tmp/
 .env
 .env.*
 !.env.example
-pres_prof.txt
-consigne.md
-IndividualStudentPRJ_ Data StorytellingDashboardWithStreamlit2026.pdf
+StApp26_*.zip
 

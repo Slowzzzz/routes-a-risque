@@ -1,3 +1,5 @@
+import math
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -26,12 +28,17 @@ def apply_layout(fig: go.Figure, height: int = 420) -> go.Figure:
     return fig
 
 
-def monthly_trend(users: pd.DataFrame) -> go.Figure:
+def monthly_trend(users: pd.DataFrame, years: tuple[int, int] | None = None) -> go.Figure:
+    # Garder les mois à zéro : les supprimer relierait artificiellement deux pics.
     monthly = (
         users.assign(month=users["date"].dt.to_period("M").dt.to_timestamp())
-        .groupby("month", as_index=False)
+        .groupby("month")
         .agg(victims=("user_id", "count"), serious=("is_serious", "sum"))
     )
+    start = pd.Timestamp(years[0], 1, 1) if years else monthly.index.min()
+    end = pd.Timestamp(years[1], 12, 1) if years else monthly.index.max()
+    monthly = monthly.reindex(pd.date_range(start, end, freq="MS"), fill_value=0)
+    monthly = monthly.rename_axis("month").reset_index()
     long_data = monthly.melt(
         "month",
         value_vars=["victims", "serious"],
@@ -54,7 +61,8 @@ def monthly_trend(users: pd.DataFrame) -> go.Figure:
         labels={"month": "Mois", "count": "Nombre de personnes", "series": ""},
         title="Évolution mensuelle des victimes",
     )
-    fig.update_traces(hovertemplate="%{x|%B %Y}<br>%{y:,.0f} personnes<extra></extra>")
+    fig.update_traces(hovertemplate="%{x|%m/%Y}<br>%{y:,.0f} personnes<extra>%{fullData.name}</extra>")
+    fig.update_yaxes(rangemode="tozero")
     return apply_layout(fig)
 
 
@@ -80,6 +88,7 @@ def accident_map(accidents: pd.DataFrame, max_points: int = 7000) -> go.Figure:
             "longitude": False,
         },
         labels={
+            "department": "Département",
             "accident_severity": "Gravité maximale",
             "date": "Date",
             "hour": "Heure",
@@ -90,7 +99,17 @@ def accident_map(accidents: pd.DataFrame, max_points: int = 7000) -> go.Figure:
         center={"lat": 46.6, "lon": 2.4},
         title="Localisation des accidents filtrés",
     )
-    fig.update_layout(map_style="carto-positron")
+    # Centrer sur la sélection, y compris un département ultramarin isolé.
+    if not mapped.empty:
+        lat_span = mapped["latitude"].max() - mapped["latitude"].min()
+        lon_span = mapped["longitude"].max() - mapped["longitude"].min()
+        span = max(lat_span, lon_span)
+        zoom = max(0, min(10, math.log2(360 / max(span, 0.1)) - 0.8))
+        fig.update_layout(map_center={
+            "lat": float((mapped["latitude"].min() + mapped["latitude"].max()) / 2),
+            "lon": float((mapped["longitude"].min() + mapped["longitude"].max()) / 2),
+        }, map_zoom=zoom)
+    fig.update_layout(map_style="carto-positron", legend=dict(orientation="h", y=-0.05, x=0))
     return apply_layout(fig, height=560)
 
 

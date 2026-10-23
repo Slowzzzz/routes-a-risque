@@ -71,6 +71,16 @@ def age_group(age: pd.Series) -> pd.Categorical:
     )
 
 
+def clean_hours(series: pd.Series) -> pd.Series:
+    """Conserver les heures inconnues sans créer de faux accidents à minuit."""
+    text = series.astype("string").str.strip().str.replace(":", "", regex=False)
+    text = text.where(text.str.len().between(3, 4)).str.zfill(4)
+    hours = pd.to_numeric(text.str[:2], errors="coerce")
+    minutes = pd.to_numeric(text.str[2:], errors="coerce")
+    valid = text.str.fullmatch(r"\d{4}").fillna(False) & hours.between(0, 23) & minutes.between(0, 59)
+    return hours.where(valid).astype("Int8")
+
+
 def load_year(year: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     paths = {}
     for table, url in RESOURCE_URLS[year].items():
@@ -96,12 +106,14 @@ def load_year(year: int) -> tuple[pd.DataFrame, pd.DataFrame]:
         },
         errors="coerce",
     )
-    time_text = characteristics["hrmn"].astype("string").str.replace(":", "", regex=False).str.zfill(4)
-    characteristics["hour"] = pd.to_numeric(time_text.str[:2], errors="coerce").fillna(0).astype("int8")
+    characteristics["hour"] = clean_hours(characteristics["hrmn"])
     characteristics["latitude"] = clean_coordinates(characteristics["lat"])
     characteristics["longitude"] = clean_coordinates(characteristics["long"])
-    characteristics.loc[~characteristics["latitude"].between(-25, 55), "latitude"] = pd.NA
-    characteristics.loc[~characteristics["longitude"].between(-65, 60), "longitude"] = pd.NA
+    # Les collectivités du Pacifique dépassent les longitudes de la métropole et des DROM.
+    characteristics.loc[~characteristics["latitude"].between(-90, 90), "latitude"] = pd.NA
+    characteristics.loc[~characteristics["longitude"].between(-180, 180), "longitude"] = pd.NA
+    null_island = characteristics["latitude"].eq(0) & characteristics["longitude"].eq(0)
+    characteristics.loc[null_island, ["latitude", "longitude"]] = pd.NA
     characteristics["department"] = normalize_department(characteristics["dep"])
     characteristics["environment"] = characteristics["agg"].map({1: "Hors agglomération", 2: "En agglomération"}).fillna("Non renseigné")
     characteristics["light"] = characteristics["lum"].map(LIGHT_LABELS).fillna("Non renseigné")
@@ -184,10 +196,12 @@ def build_quality(accidents: pd.DataFrame, users: pd.DataFrame) -> dict:
         "duplicate_user_ids": int(users["user_id"].duplicated().sum()),
         "coordinate_coverage_pct": round(100 * accidents[["latitude", "longitude"]].notna().all(axis=1).mean(), 2),
         "missing_age_pct": round(100 * users["age"].isna().mean(), 2),
+        "missing_hour_pct": round(100 * accidents["hour"].isna().mean(), 2),
         "missing_vehicle_pct": round(100 * users["vehicle_type"].isna().mean(), 2),
         "validation": {
             "one_row_per_accident": bool(accidents["accident_id"].is_unique),
             "valid_dates": bool(accidents["date"].notna().all()),
+            "valid_known_hours": bool(accidents["hour"].dropna().between(0, 23).all()),
             "valid_gravity": bool(users["gravity_code"].isin([2, 3, 4]).all()),
         },
     }
@@ -202,6 +216,8 @@ def main() -> None:
         raise ValueError("Les identifiants d'accident ne sont pas uniques.")
     if not users["gravity_code"].isin([2, 3, 4]).all():
         raise ValueError("Une gravité inattendue est présente parmi les victimes.")
+    if not accidents["date"].notna().all() or not users["user_id"].is_unique:
+        raise ValueError("Dates manquantes ou identifiants de victimes dupliqués.")
 
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     accidents.to_parquet(ACCIDENTS_PATH, index=False, compression="zstd")

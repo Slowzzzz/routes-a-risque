@@ -25,5 +25,5 @@ Le dashboard s'adresse aux collectivités et acteurs locaux de la sécurité rou
 
 Les KPIs, la gravité de la carte et les conséquences des accidents dans la heatmap portent sur les mêmes victimes sélectionnées. Avec le filtre piétons, un conducteur tué ne transforme pas un accident avec piéton légèrement blessé en accident mortel dans cette vue.
 
-Les contrôles de qualité concernent le jeu complet, avant filtrage. L’échantillonnage concerne uniquement les points de la carte. Les territoires ultramarins sont conservés.
+Les contrôles de qualité concernent le jeu complet, avant filtrage. L’échantillonnage concerne uniquement les points de la carte. Les territoires ultramarins, y compris ceux du Pacifique, sont conservés ; le cadrage s’adapte à la sélection. Les heures manquantes sont exclues uniquement de la carte de chaleur, sans être remplacées par minuit. La courbe conserve les mois sans victime sur la période sélectionnée.
 

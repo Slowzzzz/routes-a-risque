@@ -165,6 +165,12 @@ st.caption(
 
 st.divider()
 st.header("1. Suivre les vies touchées, au-delà du nombre d’accidents")
+st.markdown(
+    "**Pourquoi cette courbe ?** Elle montre l’évolution du bilan humain mois par mois et aide à "
+    "repérer les périodes à examiner avant de programmer une campagne de prévention. "
+    "L’axe horizontal représente les mois, l’axe vertical le nombre de personnes. "
+    "La seconde courbe isole les tués et hospitalisés au sein de toutes les victimes."
+)
 peak = (
     filtered_users.assign(month=filtered_users["date"].dt.to_period("M"))
     .groupby("month")
@@ -172,7 +178,7 @@ peak = (
     .idxmax()
 )
 st.markdown(f"**Dans votre sélection —** Le mois comptant le plus de victimes est **{peak.month:02d}/{peak.year}**.")
-st.plotly_chart(monthly_trend(filtered_users), use_container_width=True, config=PLOTLY_CONFIG)
+st.plotly_chart(monthly_trend(filtered_users, year_range), use_container_width=True, config=PLOTLY_CONFIG)
 annual = filtered_users.groupby("year").agg(
     victims=("user_id", "size"), serious=("is_serious", "sum"), killed=("is_killed", "sum")
 )
@@ -194,6 +200,13 @@ st.caption(
 )
 
 st.header("2. Localiser les besoins : volume et gravité ne racontent pas la même chose")
+st.markdown(
+    "**Pourquoi une carte et un classement ?** La carte situe les accidents pour préparer un "
+    "diagnostic de terrain ; chaque point représente un accident et sa couleur indique la "
+    "conséquence la plus sévère parmi les victimes sélectionnées. Le classement compare les "
+    "départements : les volumes situent les besoins, les proportions décrivent les conséquences "
+    "parmi les victimes. Ces deux lectures peuvent conduire à des priorités différentes."
+)
 valid_coordinates = filtered_accidents[["latitude", "longitude"]].notna().all(axis=1).sum()
 st.markdown(
     f"**Dans votre sélection —** **{number(valid_coordinates)} accidents** disposent de coordonnées. "
@@ -201,7 +214,10 @@ st.markdown(
 )
 map_col, rank_col = st.columns([1.35, 1])
 with map_col:
-    st.plotly_chart(accident_map(filtered_accidents), use_container_width=True, config=PLOTLY_CONFIG)
+    if valid_coordinates:
+        st.plotly_chart(accident_map(filtered_accidents), use_container_width=True, config=PLOTLY_CONFIG)
+    else:
+        st.info("Aucune coordonnée disponible dans cette sélection. Les autres analyses restent disponibles.")
 with rank_col:
     ranking_mode = st.radio(
         "Comparer les départements par", ["Nombre de victimes", "Part de tués ou hospitalisés"],
@@ -246,9 +262,20 @@ st.dataframe(
     .rename_axis("Milieu").round(1),
     use_container_width=True,
 )
-st.caption("Ces écarts orientent un diagnostic de terrain ; ils ne permettent pas d’attribuer une cause à un milieu.")
+st.caption(
+    "Lecture du tableau : « Tués » est inclus dans « Tués ou hospitalisés », lui-même inclus dans "
+    "« Victimes » ; ces colonnes ne s’additionnent pas. Le pourcentage rapporte les tués et "
+    "hospitalisés aux victimes du même milieu. Cette comparaison aide à adapter le diagnostic "
+    "aux routes en agglomération et hors agglomération, sans attribuer une cause au milieu."
+)
 
 st.header("3. Choisir les moments de prévention selon les conséquences observées")
+st.markdown(
+    "**Pourquoi cette carte de chaleur ?** Chaque case cumule les accidents d’un jour de semaine "
+    "et d’une tranche d’une heure sur toute la période sélectionnée. Une case plus foncée indique "
+    "un effectif plus élevé. Passer de tous les accidents à ceux avec tué ou hospitalisé permet "
+    "de vérifier si les créneaux les plus fréquents sont aussi ceux à examiner pour leurs conséquences."
+)
 time_measure = st.radio(
     "Accidents représentés dans la heatmap",
     ["Tous les accidents", "Avec tué ou hospitalisé", "Avec tué"], horizontal=True,
@@ -259,8 +286,9 @@ if time_measure == "Avec tué ou hospitalisé":
     time_accidents = time_accidents[time_accidents["serious"] > 0]
 elif time_measure == "Avec tué":
     time_accidents = time_accidents[time_accidents["killed"] > 0]
-if not time_accidents.empty:
-    slots = time_accidents.groupby(["weekday", "hour"]).size()
+known_time_accidents = time_accidents.dropna(subset=["weekday", "hour"])
+if not known_time_accidents.empty:
+    slots = known_time_accidents.groupby(["weekday", "hour"]).size()
     peak_day, peak_hour = slots.idxmax()
     st.markdown(
         f"**Dans votre sélection —** Pour « {time_measure.lower()} », le créneau le plus fréquent "
@@ -268,22 +296,32 @@ if not time_accidents.empty:
         "cumulés sur la période (premier créneau en cas d’égalité)."
     )
 else:
-    st.info("Aucun accident ne correspond à ce niveau de gravité dans la sélection.")
+    st.info("Aucun accident avec jour et heure connus ne correspond à cette sélection.")
 st.plotly_chart(weekday_hour_heatmap(filtered_accidents, time_measure), use_container_width=True, config=PLOTLY_CONFIG)
 st.caption(
     "La couleur mesure un nombre d’accidents, sans correction du trafic. L’échelle se recalcule "
     "à chaque sélection : comparez les valeurs, pas les couleurs entre deux vues. "
     "Un créneau fréquent justifie une observation locale, sans démontrer un effet de l’obscurité ou de la fatigue."
 )
+st.caption(
+    f"Heures manquantes : {number(time_accidents['hour'].isna().sum())} accidents exclus de cette "
+    "carte de chaleur, mais conservés dans les autres indicateurs."
+)
 
 st.header("4. Adapter la prévention aux personnes touchées")
+st.markdown(
+    "**Pourquoi des barres empilées ?** Chaque barre représente une catégorie de victimes, "
+    "répartie selon les trois niveaux de gravité BAAC. En proportions, les barres totalisent "
+    "100 % et permettent de comparer des groupes de tailles différentes. En effectifs, elles "
+    "montrent combien de personnes sont concernées pour dimensionner la prévention."
+)
 group_rates = filtered_users.groupby("user_type").agg(victims=("user_id", "count"), serious=("is_serious", "sum"))
 group_rates["rate"] = 100 * group_rates["serious"] / group_rates["victims"]
-most_exposed = group_rates["rate"].idxmax()
+highest_share = group_rates["rate"].idxmax()
 st.markdown(
-    f"**Dans votre sélection —** La catégorie **{most_exposed.lower()}** présente la plus forte part "
-    f"de tués ou hospitalisés : **{group_rates.loc[most_exposed, 'rate']:.1f} %** "
-    f"sur **{number(group_rates.loc[most_exposed, 'victims'])} victimes** "
+    f"**Dans votre sélection —** La catégorie **{highest_share.lower()}** présente la plus forte part "
+    f"de tués ou hospitalisés : **{group_rates.loc[highest_share, 'rate']:.1f} %** "
+    f"sur **{number(group_rates.loc[highest_share, 'victims'])} victimes** "
     "(première catégorie en cas d’égalité)."
 )
 user_view = st.radio("Lecture des catégories", ["Proportions (%)", "Effectifs"], horizontal=True)
@@ -312,7 +350,7 @@ st.table(pd.DataFrame([
         "Suivi à prévoir": "Victimes et tués/hospitalisés sur le secteur, avec données de trafic et comparaison temporelle.",
     },
     {
-        "Constat dans la sélection": f"{most_exposed} : {group_rates.loc[most_exposed, 'rate']:.1f} % de tués ou hospitalisés parmi les victimes.",
+        "Constat dans la sélection": f"{highest_share} : {group_rates.loc[highest_share, 'rate']:.1f} % de tués ou hospitalisés parmi les victimes.",
         "Diagnostic à mener": "Examiner les âges, modes de déplacement et circonstances avant de cibler une campagne.",
         "Piste de prévention": "Adapter les messages : attention aux traversées, visibilité, vitesse adaptée et vigilance partagée.",
         "Suivi à prévoir": "Effectifs et proportion de tués/hospitalisés pour le public concerné, avant et après l’action.",
@@ -351,7 +389,7 @@ with st.expander("Sources officielles et différences de périmètre"):
         "estimations du nombre de blessés et de blessés graves (MAIS3+), complétées par des données "
         "médicales. Ces estimations ne se comparent pas directement aux blessés hospitalisés du BAAC. "
         "Les repères officiels cités sont ceux de 2024, pas un bilan des années suivantes. "
-        "Sources consultées le 23 octobre 2026."
+        "Sources vérifiées le 24 octobre 2026."
     )
 
 with st.expander("Qualité des données et méthode", expanded=False):
@@ -361,6 +399,11 @@ with st.expander("Qualité des données et méthode", expanded=False):
     q2.metric("Coordonnées disponibles", f"{quality['coordinate_coverage_pct']:.1f}%")
     q3.metric("Âges manquants", f"{quality['missing_age_pct']:.1f}%")
     q4.metric("Doublons accident", quality["duplicate_accident_ids"])
+    st.caption(
+        f"Heures manquantes : {quality['missing_hour_pct']:.2f} %. "
+        "Elles sont exclues des analyses horaires, sans être remplacées par minuit. "
+        "Les coordonnées manquantes excluent uniquement les points de la carte."
+    )
     st.markdown(
         "Les quatre fichiers annuels — caractéristiques, lieux, véhicules et usagers — sont téléchargés "
         "depuis data.gouv.fr, normalisés puis reliés par leurs identifiants. Les KPIs d'accidents reposent "
