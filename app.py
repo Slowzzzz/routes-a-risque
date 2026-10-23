@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from utils.constants import DATASET_PAGE
+
 from utils.data import filter_data, load_data, safe_rate
 from utils.viz import (
     PLOTLY_CONFIG,
