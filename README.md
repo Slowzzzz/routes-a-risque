@@ -2,6 +2,11 @@
 
 Projet individuel de **Gabriel Geniez (20231128)** pour le module Data Analysis & Visualization.
 
+- Dashboard : https://routes-a-risque-slowzzzz.streamlit.app/
+- Dépôt : https://github.com/Slowzzzz/routes-a-risque
+
+Le déploiement Streamlit Community Cloud utilise la branche `main`, le fichier `app.py` et Python 3.13. Les mises à jour publiées sur cette branche sont reprises par Community Cloud.
+
 Cette application Streamlit analyse les accidents corporels enregistrés en France entre 2021 et 2024. Elle aide les collectivités et acteurs de la sécurité routière à repérer les périodes, territoires et catégories d'usagers associés aux situations les plus graves.
 
 ## Questions traitées
